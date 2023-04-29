@@ -1,51 +1,24 @@
-// require('dotenv').config();
+require('dotenv').config();
 const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
-const mongoose = require('mongoose');
+const config = require('./models/config');
+const cookieParser = require('cookie-parser');
+const userModal = require("./models/userModel")
 const bcrypt = require('bcryptjs');
-// const passport = require('passport');
-// const session = require('express-session');
-// const passportLocalMongoose = require('passport-local-mongoose');
-// const LocalStrategy = require('passport-local').Strategy;
+const auth = require("./middleware/auth");
 const path = require('path');
-const port = 8000;
 
-mongoose.set('strictQuery', true);
-mongoose.connect("mongodb://127.0.0.1:27017/ajay")
-    .then(() => {
-        console.log("connected.......");
-    }).catch((err) => {
-        console.log(err);
-    })
-
+const port = process.env.PORT || 8000;
 
 const staticPath = path.join(__dirname, "./public");
-// console.log(staticPath);
 
+app.use(cookieParser());
 app.use(express.static(staticPath));
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: true }));
 
-
-const userSchema = mongoose.Schema({
-    username: String,
-    password: String
-});
-
-userSchema.pre("save", async function (next) {
-
-    if (this.isModified("password")) {
-        // console.log(this.password);
-        this.password = await bcrypt.hash(this.password, 10);
-        // console.log(this.password);
-    }
-    next();
-
-})
-
-const userModal = mongoose.model("userLogin", userSchema);
-
+//only for understanding purpose
 // const securePass = async function (password) {
 
 //     // encrypt the password
@@ -66,10 +39,48 @@ app.get("/", (req, res) => {
     res.render("CollegeLogin");
 });
 
-app.get("/collegesignup", async (req, res) => {
+app.get("/collegesignup", (req, res) => {
 
     res.render("CollegeSignUp");
 })
+
+app.get("/verified", auth, (req, res) => {
+
+    res.render("verifiedPage");
+});
+
+app.get("/logout", auth, async (req, res) => {
+
+    try {
+        // console.log(req.user);
+
+        req.user.tokens = req.user.tokens.filter((currentELe) => {
+            return currentELe.token != req.token;
+        })
+
+        res.clearCookie("jwt")
+        console.log("logout Successfully");
+        await req.user.save();
+        res.redirect("/");
+    } catch (err) {
+        res.status(401).send(err);
+    }
+})
+app.get("/logoutAll", auth, async (req, res) => {
+
+    try {
+        // we are alligning empty array
+        req.user.tokens = [];
+
+        res.clearCookie("jwt")
+        console.log("logout Successfully");
+        await req.user.save();
+        res.redirect("/");
+    } catch (err) {
+        res.status(401).send(err);
+    }
+})
+
 
 app.post("/collegelogin", async (req, res) => {
 
@@ -78,17 +89,27 @@ app.post("/collegelogin", async (req, res) => {
 
     const foundData = await userModal.findOne({ username: Username });
 
-    const isMatch = await bcrypt.compare(password, foundData.password);   // its retutrn boolean
-    if (isMatch) {
-        res.render('secret');
+    if (foundData) {
+        const isMatch = await bcrypt.compare(password, foundData.password);   // its retutrn boolean
+
+        const token = await foundData.generateAuthToken();
+
+        res.cookie("jwt", token, { maxAge: 10 * 60 * 1000, httpOnly: true });  // 10min
+
+        // console.log(req.cookies.userToken);
+
+        if (isMatch) {
+            res.render('secret');
+        } else {
+            console.log("Incorrect Password");
+            res.redirect("/");
+        }
     } else {
-        console.log("Incorrect Password");
-        res.redirect("/");
+        console.log("user not exists..");
     }
 
 })
 
-const saltRound = 10;
 app.post("/collegesignup", async (req, res) => {
 
     const newUsername = req.body.username;
@@ -98,6 +119,15 @@ app.post("/collegesignup", async (req, res) => {
         username: newUsername,
         password: newPassword
     })
+
+    const token = await newUser.generateAuthToken();
+
+    // The res.cookies function is used to set the cookie name to value
+    // The value parameter may bay be a string or object converted to JSON 
+
+    res.cookie("jwt", token, { expires: new Date(Date.now() + 60000), httpOnly: true }); // 60sec
+
+    // console.log(req.cookies.userToken);
 
     await newUser.save()
         .then(() => {
@@ -109,6 +139,17 @@ app.post("/collegesignup", async (req, res) => {
     res.render('secret');
 })
 
+//only for understanding purpose
+// const createToken = async () => {
+//     const token = await jwt.sign({ __id: "644cc12646bd3e97a3d87023" }, "your.secret.keys.", {
+//         expiresIn: "2 seconds"
+//     });
+//     console.log(token);
+
+//     const userVerify = await jwt.verify(token, "your.secret.keys.");
+//     console.log(userVerify);
+// }
+// createToken();
 
 
 app.listen(port, () => {

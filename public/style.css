@@ -103,3 +103,29 @@ input[type=submit]:hover {
 .c-info {
     margin-top: 10px;
 }
+
+a {
+    text-decoration: none;
+    padding: 10px 20px;
+    margin: 5px;
+    border-radius: 3px;
+}
+
+a:hover {
+    opacity: 0.8;
+}
+
+.l1 {
+    background-color: #063860;
+    color: #eee;
+}
+
+.l2 {
+    background-color: #d14747;
+    color: #eee;
+}
+
+.l3 {
+    background-color: #8a0a0a;
+    color: #eee;
+}
